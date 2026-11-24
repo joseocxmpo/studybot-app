@@ -1,42 +1,45 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StudyBot</title>
-<style>
-  body{font-family:system-ui,sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem;color:#222}
-  h1{margin-bottom:.2rem} p.sub{color:#666;margin-top:0}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:.45rem 0;border-bottom:1px solid #eee}
-  select{padding:.3rem .5rem;font-size:1rem}
-  button{margin-top:1rem;padding:.7rem 1.4rem;font-size:1rem;border:0;border-radius:8px;background:#2b5fd9;color:#fff;cursor:pointer}
-  .res{margin-top:1.5rem;padding:1rem;border-radius:10px;text-align:center;font-size:1.4rem;font-weight:700}
-  .APTO{background:#e3f6e8;color:#14702f}.NO{background:#fde8e8;color:#a32020}
-  .err{margin-top:1rem;padding:.8rem;background:#fff3cd;border-radius:8px}
-  small{display:block;font-weight:400;font-size:.85rem;margin-top:.3rem}
-</style>
-</head>
-<body>
-<h1>StudyBot</h1>
-<p class="sub">¿Es apto este lugar para una sesión de estudio de 30 min en el campus central?</p>
-<form method="post">
-  {% for c in features %}
-  <div class="row">
-    <label for="{{ c }}">{{ etiquetas[c] }}</label>
-    <select name="{{ c }}" id="{{ c }}" required>
-      <option value="0" {% if valores.get(c) == 0 %}selected{% endif %}>No (0)</option>
-      <option value="1" {% if valores.get(c) == 1 %}selected{% endif %}>Sí (1)</option>
-    </select>
-  </div>
-  {% endfor %}
-  <button type="submit">Predecir</button>
-</form>
-{% if error %}<div class="err">{{ error }}</div>{% endif %}
-{% if resultado %}
-<div class="res {{ 'APTO' if resultado == 'APTO' else 'NO' }}">
-  {{ resultado }}
-  <small>Probabilidad de APTO según el modelo: {{ '%.0f' % (prob*100) }}%</small>
-</div>
-{% endif %}
-</body>
-</html>
+from flask import Flask, render_template, request
+import joblib
+import pandas as pd
+
+app = Flask(__name__)
+
+# El modelo ya entrenado se carga una sola vez al iniciar. No hay fit() en la app.
+bundle = joblib.load("studybot_model.joblib")
+model, FEATURES = bundle["model"], bundle["features"]
+
+ETIQUETAS = {
+    "silencio": "Silencio", "sombra": "Sombra", "aire_acondicionado": "Aire acondicionado",
+    "soporte_para_trabajar": "Soporte para trabajar (mesa)", "asientos": "Asientos",
+    "asientos_comodos": "Asientos cómodos", "enchufes": "Enchufes",
+    "flujo_personas": "Flujo alto de personas", "banos_cerca": "Baños cerca",
+    "cafeteria_cerca": "Cafetería cerca", "internet_wifi": "Internet / WiFi",
+}
+
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    resultado, prob, error, valores = None, None, None, {}
+    if request.method == "POST":
+        try:
+            for c in FEATURES:
+                raw = request.form.get(c, "").strip()
+                v = float(raw)            # falla si no es numérico
+                if v not in (0.0, 1.0):
+                    raise ValueError(f"'{ETIQUETAS[c]}' debe ser 0 o 1.")
+                valores[c] = int(v)
+        except ValueError as e:
+            msg = str(e)
+            error = msg if "debe ser" in msg else "Todos los campos deben ser numéricos (0 o 1)."
+            valores = {}
+        else:
+            fila = pd.DataFrame([[valores[c] for c in FEATURES]], columns=FEATURES)
+            pred = int(model.predict(fila)[0])
+            prob = float(model.predict_proba(fila)[0][list(model.classes_).index(1)])
+            resultado = "APTO" if pred == 1 else "NO APTO"
+    return render_template("index.html", features=FEATURES, etiquetas=ETIQUETAS,
+                           resultado=resultado, prob=prob, error=error, valores=valores)
+
+
+if __name__ == "__main__":
+    app.run(debug=False)
