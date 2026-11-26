@@ -1,6 +1,6 @@
 # StudyBot – Aplicación web
 
-Aplicación Flask que carga el modelo entrenado (Random Forest, Dataset v1.0) y predice si un lugar del campus central de la Universidad de Colima es **APTO** o **NO APTO** para una sesión de estudio de 30 minutos.
+En esta práctica tomé el modelo que entrené en la segunda entrega (Random Forest con mi Dataset v1.0) y lo usé desde una aplicación web hecha con Flask. La app predice si un lugar del campus central de la Universidad de Colima es **APTO** o **NO APTO** para una sesión de estudio de 30 minutos.
 
 ## Archivos
 - `app.py` – aplicación Flask (carga `studybot_model.joblib`, valida el formulario y predice).
@@ -18,26 +18,30 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python app.py
 ```
-Abrir http://127.0.0.1:5000, elegir Sí/No en cada variable y pulsar **Predecir**.
+Después se abre http://127.0.0.1:5000, se elige Sí/No en cada variable y se presiona **Predecir**.
 
-(Opcional) Para regenerar el modelo: `python train_model.py`.
+(Opcional) Si se quiere volver a generar el modelo: `python train_model.py`.
 
 ## Modelo
 
-Modelo: Random Forest (100 árboles, `random_state=42`), split 80/20; exactitud en prueba = 1.00.
-Variables (11, binarias 0/1): silencio, sombra, aire_acondicionado, soporte_para_trabajar, asientos, asientos_comodos, enchufes, flujo_personas, banos_cerca, cafeteria_cerca, internet_wifi.
+Usé un Random Forest de 100 árboles (`random_state=42`) y separé los datos en 80% entrenamiento y 20% prueba. En el conjunto de prueba obtuve una exactitud de 1.00.
 
-## Pruebas (orden de entrada = orden de las variables)
+Trabajé con las mismas 11 variables de la segunda entrega, todas binarias (0 = no, 1 = sí): silencio, sombra, aire_acondicionado, soporte_para_trabajar, asientos, asientos_comodos, enchufes, flujo_personas, banos_cerca, cafeteria_cerca e internet_wifi.
+
+## Pruebas
+
+Las entradas están en el mismo orden que la lista de variables de arriba.
 
 | # | Caso | Entrada | Resultado | P(APTO) | Interpretación |
 |---|------|---------|-----------|---------|----------------|
-| 1 | Laboratorio ideal | 1,1,1,1,1,1,1,0,1,0,1 | **APTO** | 1.00 | Silencio, clima, mesas, asientos cómodos, enchufes y WiFi: coincide con los laboratorios/bibliotecas del dataset, todos APTO. |
-| 2 | Árbol al aire libre | 0,0,0,0,0,0,0,1,0,0,1 | **NO APTO** | 0.00 | Sin silencio, sombra, mesa ni asiento; solo WiFi. Igual que los "Árbol a un lado de telemática" del dataset. |
-| 3 | Cafetería | 0,1,0,1,1,1,0,1,0,1,1 | **APTO** | 0.88 | Hay ruido y flujo de gente, pero mesa, asientos cómodos y WiFi compensan; consistente con las cafeterías del dataset. |
-| 4 | **Caso discutible (frontera)** | 0,0,1,1,1,0,1,0,0,1,0 | **NO APTO** | 0.50 | Hay aire, mesa, asiento y enchufes, pero sin silencio, sin sombra ni WiFi. Los árboles votan 50/50 y el empate se resuelve a NO APTO; un estudiante podría considerarlo aceptable. |
+| 1 | Laboratorio ideal | 1,1,1,1,1,1,1,0,1,0,1 | **APTO** | 1.00 | Tiene silencio, clima, mesa, asientos cómodos, enchufes y WiFi. Se parece a los laboratorios y bibliotecas de mi dataset, que salieron todos APTO. |
+| 2 | Árbol al aire libre | 0,0,0,0,0,0,0,1,0,0,1 | **NO APTO** | 0.00 | No tiene silencio, sombra, mesa ni asiento; lo único que tiene es WiFi. Es igual a los árboles junto a telemática que registré en el dataset. |
+| 3 | Cafetería | 0,1,0,1,1,1,0,1,0,1,1 | **APTO** | 0.88 | Hay ruido y pasa mucha gente, pero la mesa, los asientos cómodos y el WiFi compensan. Coincide con las cafeterías que registré. |
+| 4 | **Caso discutible (frontera)** | 0,0,1,1,1,0,1,0,0,1,0 | **NO APTO** | 0.50 | Tiene aire, mesa, asiento y enchufes, pero no hay silencio, sombra ni WiFi. La mitad de los árboles votó APTO y la otra mitad NO APTO, y el empate quedó en NO APTO. Yo creo que para algunos estudiantes sí podría ser un lugar aceptable. |
 
-Las mismas 4 entradas dieron el mismo resultado en la función `predecir()` y en la aplicación web (probada con el cliente de pruebas de Flask). También se validó que valores como `abc` o `5` se rechazan con un mensaje de error.
-La app usa el modelo guardado: en `app.py` no hay reglas escritas a mano ni `fit()`.
+Probé las mismas 4 entradas en la función `predecir()` y en la aplicación web, y en ambas obtuve el mismo resultado. También comprobé que la app rechaza valores como `abc` o `5` y muestra un mensaje de error.
+
+La app usa el modelo guardado: en `app.py` no escribí reglas a mano ni llamo a `fit()`.
 
 ### Capturas
 
@@ -63,19 +67,26 @@ La app usa el modelo guardado: en `app.py` no hay reglas escritas a mano ni `fit
 
 ## Preguntas
 
-1. **¿Qué contiene `studybot_model.joblib`?** Un diccionario con el Random Forest ya entrenado (los 100 árboles con sus divisiones y parámetros aprendidos) y la lista ordenada de las 11 variables que espera. No contiene los datos de entrenamiento ni código de la app.
-2. **¿Por qué no ejecutar `fit()` en la app?** Entrenar es lento y se repetiría en cada inicio o petición; además podría cambiar el modelo (aleatoriedad, datos distintos) y dar resultados inconsistentes con los evaluados. La app solo debe hacer inferencia con el modelo ya validado.
-3. **¿Por qué el mismo preprocesamiento?** El modelo aprendió con datos en cierto formato (mismas columnas, mismo orden, misma escala/codificación). Si al predecir se transforman distinto, las entradas no significan lo mismo para el modelo y las predicciones serían erróneas. Aquí no hay escalado, pero sí importa usar las mismas columnas y el mismo orden (por eso se guardan en el joblib).
-4. **Flask local vs. uso real.** Localmente, el servidor de desarrollo corre en tu equipo, para una sola persona y sin seguridad. En uso real se despliega en un servidor/nube con un servidor WSGI (gunicorn), HTTPS, `debug` desactivado, dependencias fijas, un dominio público, y manejo de concurrencia, errores, monitoreo y seguridad.
+**1. ¿Qué contiene el archivo `studybot_model.joblib`?**
+Guardé un diccionario con dos cosas: el Random Forest ya entrenado (los 100 árboles con las divisiones que aprendió) y la lista de las 11 variables en el orden en que el modelo las espera. No contiene los datos de entrenamiento ni el código de la aplicación.
+
+**2. ¿Por qué no se debe volver a ejecutar `fit()` dentro de la aplicación?**
+Porque entrenar tarda y se repetiría cada vez que se inicia la app o llega una petición. Además, el modelo podría cambiar (por la aleatoriedad o por usar otros datos) y ya no sería el mismo que evalué. La app solo tiene que predecir con el modelo que ya validé.
+
+**3. ¿Por qué la aplicación debe usar exactamente el mismo preprocesamiento utilizado durante el entrenamiento?**
+Porque el modelo aprendió con los datos en un formato específico: ciertas columnas, en cierto orden y con cierta codificación. Si al predecir los datos llegan de otra forma, el modelo los interpreta mal y las predicciones salen equivocadas. En mi caso no usé escalado, pero sí es importante respetar las mismas columnas y el mismo orden, y por eso los guardé junto con el modelo en el joblib.
+
+**4. ¿Qué diferencia existe entre ejecutar Flask localmente y desplegar una aplicación para uso real?**
+Cuando ejecuto Flask localmente uso su servidor de desarrollo, que corre en mi computadora, solo lo uso yo y no tiene medidas de seguridad. Para uso real la app se tiene que desplegar en un servidor o en la nube, con un servidor como gunicorn, HTTPS, el modo `debug` apagado, versiones fijas de las librerías y una dirección pública. También hay que pensar en que muchas personas la usen al mismo tiempo, en manejar errores, en monitorearla y en la seguridad.
 
 ## Despliegue en Render (opcional)
-1. Sube todo el proyecto a GitHub (incluye `studybot_model.joblib`, `Procfile` y `requirements.txt`).
-2. En https://render.com crea una cuenta y elige **New → Web Service**, conectando tu repositorio.
-3. Configura:
+1. Subir todo el proyecto a GitHub (incluyendo `studybot_model.joblib`, `Procfile` y `requirements.txt`).
+2. En https://render.com crear una cuenta, elegir **New → Web Service** y conectar el repositorio.
+3. Configurar:
    - **Runtime:** Python 3
    - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `gunicorn app:app`
    - **Instance type:** Free
-4. Pulsa **Create Web Service**. Al terminar el build, Render te da una URL pública `https://<nombre>.onrender.com`.
+4. Presionar **Create Web Service**. Cuando termina el build, Render da una URL pública `https://<nombre>.onrender.com`.
 
-Nota: en el plan gratuito la app se "duerme" tras inactividad y la primera visita tarda ~1 minuto.
+Nota: en el plan gratuito la app se "duerme" si nadie la usa por un rato, y la primera visita puede tardar alrededor de un minuto.
